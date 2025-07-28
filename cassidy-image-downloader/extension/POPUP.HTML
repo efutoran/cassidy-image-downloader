@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 15px;
+      font-family: Arial, sans-serif;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 15px;
+    }
+    .button {
+      width: 100%;
+      padding: 12px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 5px 0;
+    }
+    .button:hover {
+      background: #45a049;
+    }
+    .info {
+      font-size: 12px;
+      color: #666;
+      margin-top: 10px;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h3>📥 Cassidy Downloader</h3>
+  </div>
+  
+  <button id="downloadBtn" class="button">
+    Download Images from Current Email
+  </button>
+  
+  <div class="info">
+    <strong>Instructions:</strong><br>
+    1. Open a Cassidy email in Gmail<br>
+    2. Click the download button above<br>
+    3. Images will save to Downloads/Cassidy_Images/<br><br>
+    
+    <strong>File naming:</strong><br>
+    Cassidy_[Austin/Everett]_[Date]_[#].jpg
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
