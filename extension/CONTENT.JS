@@ -1,28 +1,96 @@
+// Complete content.js with fixed date extraction
 (function() {
   'use strict';
 
   console.log('🚀 Cassidy extension content script loaded');
 
+  // Helper function to convert month names to numbers
+  function getMonthNumber(monthName) {
+    const months = {
+      'january': '01', 'february': '02', 'march': '03', 'april': '04',
+      'may': '05', 'june': '06', 'july': '07', 'august': '08',
+      'september': '09', 'october': '10', 'november': '11', 'december': '12'
+    };
+    return months[monthName.toLowerCase()] || '01';
+  }
+
+  // Helper function to format date consistently
+  function formatDate(dateString) {
+    const dateParts = dateString.split('/');
+    if (dateParts.length === 3) {
+      const month = dateParts[0].padStart(2, '0');
+      const day = dateParts[1].padStart(2, '0');
+      let year = dateParts[2];
+      
+      // Handle 2-digit years (assume 2000s)
+      if (year.length === 2) {
+        year = parseInt(year) > 50 ? '19' + year : '20' + year;
+      }
+      
+      return `${year}-${month}-${day}`;
+    }
+    return dateString;
+  }
+
+  // UPDATED extractNameAndDate function with better date detection
   function extractNameAndDate(subject) {
-    const nameMatch = subject.match(/(Austin|Everett)/i);
-    const dateMatch = subject.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+    console.log('🔍 Extracting from subject:', subject);
     
+    // Extract name (Austin/Everett)
+    const nameMatch = subject.match(/(Austin|Everett)/i);
     const name = nameMatch ? nameMatch[1] : 'Unknown';
+    
+    // Try multiple date patterns from Cassidy emails
     let date = 'Unknown';
     
-    if (dateMatch) {
-      const dateParts = dateMatch[1].split('/');
-      if (dateParts.length === 3) {
-        const month = dateParts[0].padStart(2, '0');
-        const day = dateParts[1].padStart(2, '0');
-        let year = dateParts[2];
-        if (year.length === 2) {
-          year = '20' + year;
-        }
-        date = `${year}-${month}-${day}`;
+    // Pattern 1: "for MM/DD/YY" or "for MM/DD/YYYY" (most common in Cassidy emails)
+    const datePattern1 = subject.match(/for\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
+    if (datePattern1) {
+      date = formatDate(datePattern1[1]);
+      console.log('✅ Found date pattern "for MM/DD/YY":', date);
+    }
+    
+    // Pattern 2: "MM/DD/YY" or "MM/DD/YYYY" anywhere in subject
+    if (date === 'Unknown') {
+      const datePattern2 = subject.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+      if (datePattern2) {
+        date = formatDate(datePattern2[1]);
+        console.log('✅ Found date pattern "MM/DD/YY":', date);
       }
     }
     
+    // Pattern 3: Try to find date in email content if subject fails
+    if (date === 'Unknown') {
+      console.log('🔍 Looking for date in email content...');
+      const emailContent = document.body.textContent;
+      
+      // Look for "Month DD, YYYY" format common in email headers
+      const monthPattern = emailContent.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})/i);
+      if (monthPattern) {
+        const monthName = monthPattern[1];
+        const day = monthPattern[2].padStart(2, '0');
+        const year = monthPattern[3];
+        const monthNum = getMonthNumber(monthName);
+        date = `${year}-${monthNum}-${day}`;
+        console.log('✅ Found date in content "Month DD, YYYY":', date);
+      }
+    }
+    
+    // Pattern 4: Gmail's email timestamp (last resort)
+    if (date === 'Unknown') {
+      console.log('🔍 Looking for Gmail timestamp...');
+      const timestamps = document.querySelectorAll('[data-date], .g3, .go, time');
+      for (const timestamp of timestamps) {
+        const dateText = timestamp.textContent || timestamp.getAttribute('data-date') || timestamp.getAttribute('datetime');
+        if (dateText && dateText.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/)) {
+          date = formatDate(dateText.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/)[1]);
+          console.log('✅ Found date in Gmail timestamp:', date);
+          break;
+        }
+      }
+    }
+    
+    console.log('📝 Final extracted - Name:', name, 'Date:', date);
     return { name, date };
   }
 
@@ -141,44 +209,59 @@
     return true;
   }
 
+  // UPDATED processCassidyEmail function with better subject detection
   function processCassidyEmail() {
     console.log('🔍 Processing Cassidy email...');
     showNotification('Processing email...', 'info');
 
     try {
-      // Find email subject - try multiple approaches
+      // IMPROVED: Find email subject with better detection
       let subject = '';
       
-      // Method 1: Look for title or subject elements
-      const titleElements = document.querySelectorAll('h1, h2, h3, [role="heading"], .hP, .bog');
-      for (const element of titleElements) {
-        if (element.textContent.includes('Digest from Cassidy')) {
-          subject = element.textContent.trim();
-          break;
+      // Method 1: Look for Gmail subject elements first
+      const gmailSubjectSelectors = [
+        '.hP',           // Gmail subject line
+        '.bog',          // Gmail subject
+        'h2',            // Headers
+        '[role="heading"]'
+      ];
+      
+      for (const selector of gmailSubjectSelectors) {
+        const elements = document.querySelectorAll(selector);
+        for (const element of elements) {
+          const text = element.textContent.trim();
+          if (text.includes('Digest from Cassidy')) {
+            subject = text;
+            console.log('✅ Found subject in Gmail element:', subject);
+            break;
+          }
         }
+        if (subject) break;
       }
       
-      // Method 2: Search page text
-      if (!subject) {
-        const pageText = document.body.textContent;
-        const match = pageText.match(/([^\n]*Digest from Cassidy[^\n]*)/);
-        if (match) {
-          subject = match[1].trim();
-        }
-      }
-      
-      // Method 3: Check page title
+      // Method 2: Check page title
       if (!subject && document.title.includes('Digest from Cassidy')) {
         subject = document.title;
+        console.log('✅ Found subject in page title:', subject);
+      }
+      
+      // Method 3: Look for subject pattern in email body
+      if (!subject) {
+        const emailContent = document.body.textContent;
+        const subjectMatch = emailContent.match(/([^.\n]*Digest from Cassidy[^.\n]*)/);
+        if (subjectMatch) {
+          subject = subjectMatch[1].trim();
+          console.log('✅ Found subject in email content:', subject);
+        }
       }
 
       if (!subject.includes('Digest from Cassidy')) {
         throw new Error('Not a Cassidy email. Please open a Cassidy digest email first.');
       }
 
-      console.log('✅ Found subject:', subject);
+      console.log('✅ Final subject for parsing:', subject);
       const { name, date } = extractNameAndDate(subject);
-      console.log('📝 Extracted:', { name, date });
+      console.log('📝 Extracted data:', { name, date });
 
       // Find all images on the page
       const allImages = Array.from(document.querySelectorAll('img'));
@@ -198,6 +281,7 @@
       }));
 
       console.log('📤 Sending to background:', imageData.length, 'images');
+      console.log('📝 Sample filename:', imageData[0]?.filename);
 
       // Send to background script
       chrome.runtime.sendMessage({
